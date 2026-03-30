@@ -93,9 +93,28 @@ Seeded accounts:
 - `/records/visits/{patient_id}`, `/records/timeline`
 - `/referrals`
 - `/assistant/guidelines`, `/assistant/chat`
+- `/users/me`, `/users/me/avatar`
 - `/simulation/cases`, `/simulation/attempt`
 - `/analytics/summary`, `/analytics/alerts`
 - `/drugs`
+- `/team-chat`
+
+## Open-Source AI Advisor Options
+
+ClinIQ advisor supports:
+- `rule_based` (default fallback)
+- `ollama` (local open-source LLM API)
+- `huggingface` (Inference API)
+
+Set in `backend/.env`:
+- `ADVISOR_PROVIDER=ollama`
+- `OLLAMA_URL=http://localhost:11434`
+- `OLLAMA_MODEL=llama3.1:8b`
+
+Or Hugging Face:
+- `ADVISOR_PROVIDER=huggingface`
+- `HF_API_URL=...`
+- `HF_API_TOKEN=...`
 
 ## Deployment
 

@@ -1,7 +1,10 @@
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from sqlalchemy import text
 from sqlmodel import Session, select
 
 from .core.config import get_settings
@@ -21,6 +24,7 @@ from .routers import (
     referrals,
     simulation,
     team_chat,
+    users,
 )
 from .security import hash_password
 
@@ -30,6 +34,21 @@ settings = get_settings()
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     create_db_and_tables()
+    # Backward-compatible column additions for existing SQLite databases.
+    if settings.database_url.startswith("sqlite"):
+        with engine.begin() as conn:
+            existing_cols = {row[1] for row in conn.execute(text("PRAGMA table_info(user)")).fetchall()}
+            alter_statements = []
+            if "department" not in existing_cols:
+                alter_statements.append("ALTER TABLE user ADD COLUMN department VARCHAR DEFAULT 'General'")
+            if "phone" not in existing_cols:
+                alter_statements.append("ALTER TABLE user ADD COLUMN phone VARCHAR")
+            if "avatar_url" not in existing_cols:
+                alter_statements.append("ALTER TABLE user ADD COLUMN avatar_url VARCHAR")
+            if "bio" not in existing_cols:
+                alter_statements.append("ALTER TABLE user ADD COLUMN bio VARCHAR")
+            for stmt in alter_statements:
+                conn.execute(text(stmt))
     with Session(engine) as session:
         admin = session.exec(select(User).where(User.email == "admin@cliniq.app")).first()
         if not admin:
@@ -39,6 +58,7 @@ async def lifespan(_: FastAPI):
                     email="admin@cliniq.app",
                     password_hash=hash_password("Admin123!"),
                     role=UserRole.admin,
+                    department="Administration",
                 )
             )
         nurse = session.exec(select(User).where(User.email == "nurse@cliniq.app")).first()
@@ -49,6 +69,7 @@ async def lifespan(_: FastAPI):
                     email="nurse@cliniq.app",
                     password_hash=hash_password("Nurse123!"),
                     role=UserRole.nurse,
+                    department="Emergency",
                 )
             )
         for name, alt in [("ceftriaxone", "ampicillin"), ("oxygen", "manual airway support"), ("labetalol", "hydralazine")]:
@@ -97,3 +118,8 @@ app.include_router(encounters.router)
 app.include_router(doctor_chat.router)
 app.include_router(prescriptions.router)
 app.include_router(team_chat.router)
+app.include_router(users.router)
+
+uploads_path = Path(__file__).resolve().parents[1] / "uploads"
+uploads_path.mkdir(parents=True, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=str(uploads_path)), name="uploads")

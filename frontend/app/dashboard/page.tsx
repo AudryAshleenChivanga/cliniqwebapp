@@ -9,7 +9,7 @@ import { apiRequest, login } from "@/lib/api";
 import { LocaleCode, t } from "@/lib/i18n";
 import { transcribeOnce } from "@/lib/voice";
 
-type SectionId = "registration" | "assessment" | "labs" | "advisor" | "escalation" | "team" | "prescription" | "history" | "analytics";
+type SectionId = "registration" | "assessment" | "labs" | "advisor" | "escalation" | "team" | "profile" | "prescription" | "history" | "analytics";
 type AuthMode = "signin" | "signup";
 
 type PredictionOutput = {
@@ -57,22 +57,42 @@ type DoctorChatMessage = {
 
 type TeamChatMessage = {
   id: number;
+  sender_user_id: number;
   sender_name: string;
   sender_role: string;
+  sender_avatar_url?: string;
   message: string;
   created_at: string;
 };
 
-const sectionLabels: Array<{ id: SectionId; label: string }> = [
-  { id: "registration", label: "Patient Registration" },
-  { id: "assessment", label: "Symptom Assessment" },
-  { id: "labs", label: "Lab Reassessment" },
-  { id: "advisor", label: "AI Advisor Chat" },
-  { id: "escalation", label: "Emergency Escalation" },
-  { id: "team", label: "Health Worker Group Chat" },
-  { id: "prescription", label: "Prescription" },
-  { id: "history", label: "History" },
-  { id: "analytics", label: "Analytics" },
+type AdvisorStatus = {
+  provider: string;
+  available: boolean;
+  mode: string;
+};
+
+type ClinicianProfile = {
+  id: number;
+  full_name: string;
+  email: string;
+  role: string;
+  department: string;
+  phone?: string;
+  avatar_url?: string;
+  bio?: string;
+};
+
+const sectionLabels: Array<{ id: SectionId; key: string }> = [
+  { id: "registration", key: "sidebarRegistration" },
+  { id: "assessment", key: "sidebarAssessment" },
+  { id: "labs", key: "sidebarLabs" },
+  { id: "advisor", key: "sidebarAdvisor" },
+  { id: "escalation", key: "sidebarEscalation" },
+  { id: "team", key: "sidebarTeam" },
+  { id: "profile", key: "sidebarProfile" },
+  { id: "prescription", key: "sidebarPrescription" },
+  { id: "history", key: "sidebarHistory" },
+  { id: "analytics", key: "sidebarAnalytics" },
 ];
 
 const defaultPatient = { national_id: "", full_name: "", age: 30, sex: "Female", contact: "", medical_history: "", department: "OPD" };
@@ -115,6 +135,10 @@ export default function DashboardPage() {
   const [doctorChatText, setDoctorChatText] = useState("");
   const [teamMessages, setTeamMessages] = useState<TeamChatMessage[]>([]);
   const [teamMessageInput, setTeamMessageInput] = useState("");
+  const [advisorStatus, setAdvisorStatus] = useState<AdvisorStatus | null>(null);
+  const [currentUser, setCurrentUser] = useState<ClinicianProfile | null>(null);
+  const [profileForm, setProfileForm] = useState({ full_name: "", department: "", phone: "", bio: "" });
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [history, setHistory] = useState<Array<{ id: number; report_text: string; created_at: string }>>([]);
   const [prescriptions, setPrescriptions] = useState<Array<{ id: number; diagnosis: string; medications: string; clinician_name: string; electronic_signature: string }>>([]);
   const [analytics, setAnalytics] = useState<{ common_conditions: Array<{ condition: string; count: number }> }>({ common_conditions: [] });
@@ -143,6 +167,8 @@ export default function DashboardPage() {
     if (!loggedIn) return;
     void apiRequest("/analytics/summary").then((v) => setAnalytics(v as any)).catch(() => undefined);
     void loadTeamMessages();
+    void loadCurrentUser();
+    void loadAdvisorStatus();
   }, [loggedIn]);
 
   useEffect(() => {
@@ -154,7 +180,11 @@ export default function DashboardPage() {
   useEffect(() => {
     if (!loggedIn) return;
     const teamTimer = setInterval(() => void loadTeamMessages(), 6000);
-    return () => clearInterval(teamTimer);
+    const advisorTimer = setInterval(() => void loadAdvisorStatus(), 10000);
+    return () => {
+      clearInterval(teamTimer);
+      clearInterval(advisorTimer);
+    };
   }, [loggedIn]);
 
   useEffect(() => {
@@ -190,6 +220,23 @@ export default function DashboardPage() {
     setTeamMessages(msgs as any);
   };
 
+  const loadAdvisorStatus = async () => {
+    const status = await apiRequest("/assistant/status").catch(() => null);
+    setAdvisorStatus(status as any);
+  };
+
+  const loadCurrentUser = async () => {
+    const me = (await apiRequest("/users/me").catch(() => null)) as ClinicianProfile | null;
+    if (!me) return;
+    setCurrentUser(me);
+    setProfileForm({
+      full_name: me.full_name || "",
+      department: me.department || "",
+      phone: me.phone || "",
+      bio: me.bio || "",
+    });
+  };
+
   const handleAuth = async () => {
     setLoading(true);
     setError("");
@@ -209,7 +256,7 @@ export default function DashboardPage() {
       localStorage.setItem("cliniq_token", result.access_token);
       setLoggedIn(true);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Authentication failed");
+      setError(e instanceof Error ? e.message : tr("authFailed"));
     } finally {
       setLoading(false);
     }
@@ -309,18 +356,33 @@ export default function DashboardPage() {
     if (!prompt) return;
     setAdvisorInput("");
     setAdvisorMessages((prev) => [...prev, { role: "nurse", text: prompt }]);
-    const answer = (await apiRequest("/assistant/chat", {
-      method: "POST",
-      body: JSON.stringify({
-        prompt,
-        patient_context: {
-          triage: encounter?.postlab_assessment.triage || prelab?.triage,
-          risk_score: encounter?.postlab_assessment.risk_score || prelab?.risk_score,
-          diagnosis: encounter?.postlab_assessment.top_conditions?.[0]?.condition || prelab?.top_conditions?.[0]?.condition,
-        },
-      }),
-    })) as { answer: string };
-    setAdvisorMessages((prev) => [...prev, { role: "ai", text: answer.answer }]);
+    try {
+      const answer = (await apiRequest("/assistant/chat", {
+        method: "POST",
+        body: JSON.stringify({
+          prompt,
+          patient_context: {
+            triage: encounter?.postlab_assessment.triage || prelab?.triage,
+            risk_score: encounter?.postlab_assessment.risk_score || prelab?.risk_score,
+            diagnosis: encounter?.postlab_assessment.top_conditions?.[0]?.condition || prelab?.top_conditions?.[0]?.condition,
+          },
+        }),
+      })) as { answer: string };
+      setAdvisorMessages((prev) => [...prev, { role: "ai", text: answer.answer }]);
+    } catch (err) {
+      const fallback = [
+        "Clinical Summary:",
+        `- Triage: ${encounter?.postlab_assessment.triage || prelab?.triage || "unknown"}`,
+        `- Risk: ${encounter?.postlab_assessment.risk_score || prelab?.risk_score || "unknown"}`,
+        `- Likely condition: ${encounter?.postlab_assessment.top_conditions?.[0]?.condition || prelab?.top_conditions?.[0]?.condition || "not provided"}`,
+        "Advisor Steps:",
+        "1. Reassess vitals and danger signs.",
+        "2. Continue protocol-based treatment.",
+        "3. Escalate to doctor if any deterioration.",
+      ].join("\n");
+      setAdvisorMessages((prev) => [...prev, { role: "ai", text: fallback }]);
+      setStatus(err instanceof Error ? `${tr("statusAdvisorFallback")} (${err.message})` : tr("statusAdvisorFallback"));
+    }
   };
 
   const sendDoctorMessage = async () => {
@@ -343,6 +405,31 @@ export default function DashboardPage() {
     await apiRequest("/team-chat", { method: "POST", body: JSON.stringify({ message: teamMessageInput.trim() }) });
     setTeamMessageInput("");
     await loadTeamMessages();
+  };
+
+  const updateProfile = async () => {
+    const updated = (await apiRequest("/users/me", {
+      method: "PATCH",
+      body: JSON.stringify(profileForm),
+    })) as ClinicianProfile;
+    setCurrentUser(updated);
+    setStatus(tr("statusProfileUpdated"));
+  };
+
+  const uploadAvatar = async () => {
+    if (!avatarFile) return;
+    const token = localStorage.getItem("cliniq_token");
+    const formData = new FormData();
+    formData.append("file", avatarFile);
+    const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000"}/users/me/avatar`, {
+      method: "POST",
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: formData,
+    });
+    if (!response.ok) throw new Error("Avatar upload failed");
+    const user = (await response.json()) as ClinicianProfile;
+    setCurrentUser(user);
+    setStatus(tr("statusProfilePictureUpdated"));
   };
 
   const callAmbulance = async () => {
@@ -368,19 +455,19 @@ export default function DashboardPage() {
           <div className="flex items-center gap-3">
             <Image src="/icon-192.png" width={44} height={44} alt="ClinIQ logo" className="rounded-lg" />
             <div>
-              <h1 className="text-2xl font-bold">{authMode === "signin" ? "Sign In" : "Sign Up"}</h1>
-              <p className="text-sm text-slate-600">Real user access for health workers</p>
+              <h1 className="text-2xl font-bold">{authMode === "signin" ? tr("signIn") : tr("signUp")}</h1>
+              <p className="text-sm text-slate-600">{tr("authHelper")}</p>
             </div>
           </div>
           <div className="flex gap-2">
-            <button onClick={() => setAuthMode("signin")} className={`rounded-lg px-3 py-2 text-sm ${authMode === "signin" ? "bg-cliniq-teal text-white" : "bg-slate-100"}`}>Sign In</button>
-            <button onClick={() => setAuthMode("signup")} className={`rounded-lg px-3 py-2 text-sm ${authMode === "signup" ? "bg-cliniq-teal text-white" : "bg-slate-100"}`}>Sign Up</button>
+            <button onClick={() => setAuthMode("signin")} className={`rounded-lg px-3 py-2 text-sm ${authMode === "signin" ? "bg-cliniq-teal text-white" : "bg-slate-100"}`}>{tr("signIn")}</button>
+            <button onClick={() => setAuthMode("signup")} className={`rounded-lg px-3 py-2 text-sm ${authMode === "signup" ? "bg-cliniq-teal text-white" : "bg-slate-100"}`}>{tr("signUp")}</button>
           </div>
-          {authMode === "signup" ? <input className="rounded-lg border p-2" value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Full name" /> : null}
-          <input className="rounded-lg border p-2" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" />
-          <input type="password" className="rounded-lg border p-2" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Password" />
-          <p className="text-xs text-slate-500">Strong password required: uppercase, lowercase, number, symbol.</p>
-          <button onClick={handleAuth} disabled={loading} className="rounded-lg bg-cliniq-teal px-4 py-2 font-semibold text-white">{loading ? "..." : authMode === "signin" ? "Sign In" : "Create Account"}</button>
+          {authMode === "signup" ? <input className="rounded-lg border p-2" value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder={tr("fullName")} /> : null}
+          <input className="rounded-lg border p-2" value={email} onChange={(e) => setEmail(e.target.value)} placeholder={tr("email")} />
+          <input type="password" className="rounded-lg border p-2" value={password} onChange={(e) => setPassword(e.target.value)} placeholder={tr("password")} />
+          <p className="text-xs text-slate-500">{tr("strongPasswordHint")}</p>
+          <button onClick={handleAuth} disabled={loading} className="rounded-lg bg-cliniq-teal px-4 py-2 font-semibold text-white">{loading ? "..." : authMode === "signin" ? tr("signIn") : tr("createAccount")}</button>
           {error ? <p className="text-sm text-red-600 break-words">{error}</p> : null}
         </div>
       </main>
@@ -398,6 +485,15 @@ export default function DashboardPage() {
           </div>
         </div>
         <div className="flex gap-2">
+          {advisorStatus ? (
+            <span
+              className={`inline-flex items-center rounded-lg px-3 py-2 text-xs font-semibold ${
+                advisorStatus.available ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"
+              }`}
+            >
+              {tr("advisorLabel")}: {advisorStatus.provider} ({advisorStatus.available ? tr("advisorConnected") : tr("advisorFallback")})
+            </span>
+          ) : null}
           <select className="rounded-lg bg-white px-3 py-2 text-slate-800" value={lang} onChange={(e) => { const v = e.target.value as LocaleCode; setLang(v); localStorage.setItem("cliniq_lang", v); }}>
             <option value="en-US">{tr("languageEnglish")}</option>
             <option value="rw-RW">{tr("languageKinyarwanda")}</option>
@@ -412,16 +508,16 @@ export default function DashboardPage() {
 
       <div className="mt-4 grid gap-4 lg:grid-cols-[280px_1fr]">
         <aside className="card p-3">
-          <p className="mb-2 px-2 text-xs font-semibold uppercase tracking-wide text-slate-500">ClinIQ Modules</p>
+          <p className="mb-2 px-2 text-xs font-semibold uppercase tracking-wide text-slate-500">{tr("sidebarModules")}</p>
           <div className="space-y-1">
             {sectionLabels.map((s) => (
-              <button key={s.id} className={`w-full rounded-lg px-3 py-2 text-left text-sm ${activeSection === s.id ? "bg-cliniq-teal text-white" : "bg-slate-50 text-slate-700 hover:bg-slate-100"}`} onClick={() => setActiveSection(s.id)}>{s.label}</button>
+              <button key={s.id} className={`w-full rounded-lg px-3 py-2 text-left text-sm ${activeSection === s.id ? "bg-cliniq-teal text-white" : "bg-slate-50 text-slate-700 hover:bg-slate-100"}`} onClick={() => setActiveSection(s.id)}>{tr(s.key)}</button>
             ))}
           </div>
           <div className="mt-4 rounded-lg border bg-slate-50 p-3 text-xs text-slate-600">
             <p>{tr("trackingId")}</p>
             <p className="font-semibold text-slate-800">{trackingId}</p>
-            {registeredPatient ? <p className="mt-1">Department: {registeredPatient.department}</p> : <p className="mt-1">{tr("noPatientLoaded")}</p>}
+            {registeredPatient ? <p className="mt-1">{tr("department")}: {registeredPatient.department}</p> : <p className="mt-1">{tr("noPatientLoaded")}</p>}
           </div>
         </aside>
 
@@ -482,13 +578,18 @@ export default function DashboardPage() {
 
           {activeSection === "advisor" ? (
             <div className="space-y-3">
+              {advisorStatus ? (
+                <p className={`rounded-lg p-2 text-xs ${advisorStatus.available ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
+                  {tr("providerLabel")}: {advisorStatus.provider} | {tr("modeLabel")}: {advisorStatus.mode} | {tr("statusLabel")}: {advisorStatus.available ? tr("advisorConnected") : tr("advisorFallback")}
+                </p>
+              ) : null}
               <div className="max-h-72 space-y-2 overflow-auto rounded-lg border p-3 text-sm">
-                {advisorMessages.length === 0 ? <p className="text-slate-500">Ask a clinical question to the AI advisor.</p> : null}
-                {advisorMessages.map((m, i) => <pre key={i} className={`whitespace-pre-wrap rounded p-2 ${m.role === "ai" ? "bg-cyan-50" : "bg-slate-50"}`}>{m.role === "ai" ? "AI Advisor:\n" : "Nurse:\n"}{m.text}</pre>)}
+                {advisorMessages.length === 0 ? <p className="text-slate-500">{tr("askAdvisorEmpty")}</p> : null}
+                {advisorMessages.map((m, i) => <pre key={i} className={`whitespace-pre-wrap rounded p-2 ${m.role === "ai" ? "bg-cyan-50" : "bg-slate-50"}`}>{m.role === "ai" ? `${tr("aiAdvisorPrefix")}:\n` : `${tr("nursePrefix")}:\n`}{m.text}</pre>)}
               </div>
               <div className="flex gap-2">
-                <input className="flex-1 rounded-lg border p-2" value={advisorInput} onChange={(e) => setAdvisorInput(e.target.value)} placeholder="Ask AI advisor..." />
-                <button onClick={askAdvisor} className="rounded-lg bg-cliniq-teal px-4 py-2 font-semibold text-white">Ask</button>
+                <input className="flex-1 rounded-lg border p-2" value={advisorInput} onChange={(e) => setAdvisorInput(e.target.value)} placeholder={tr("askAiAdvisor")} />
+                <button onClick={askAdvisor} className="rounded-lg bg-cliniq-teal px-4 py-2 font-semibold text-white">{tr("ask")}</button>
               </div>
             </div>
           ) : null}
@@ -497,11 +598,11 @@ export default function DashboardPage() {
             <div className="space-y-3">
               <button onClick={callAmbulance} disabled={!encounter} className="rounded-lg bg-cliniq-red px-4 py-2 font-semibold text-white disabled:opacity-50">{tr("callAmbulance")}</button>
               <div className="max-h-56 space-y-2 overflow-auto rounded-lg border p-3 text-sm">
-                {doctorChatMessages.length === 0 ? <p className="text-slate-500">No doctor escalation messages yet.</p> : null}
+                {doctorChatMessages.length === 0 ? <p className="text-slate-500">{tr("noDoctorMessages")}</p> : null}
                 {doctorChatMessages.map((m) => <p key={m.id} className="rounded bg-slate-50 p-2"><span className="font-semibold">{m.sender_role}</span>: {m.message}</p>)}
               </div>
               <div className="flex gap-2">
-                <input className="flex-1 rounded-lg border p-2" value={doctorChatText} onChange={(e) => setDoctorChatText(e.target.value)} placeholder="Message doctor..." />
+                <input className="flex-1 rounded-lg border p-2" value={doctorChatText} onChange={(e) => setDoctorChatText(e.target.value)} placeholder={tr("messageDoctor")} />
                 <button onClick={sendDoctorMessage} className="rounded-lg border px-4">{tr("send")}</button>
               </div>
             </div>
@@ -510,13 +611,74 @@ export default function DashboardPage() {
           {activeSection === "team" ? (
             <div className="space-y-3">
               <div className="max-h-64 space-y-2 overflow-auto rounded-lg border p-3 text-sm">
-                {teamMessages.length === 0 ? <p className="text-slate-500">No team messages yet.</p> : null}
-                {teamMessages.map((m) => <p key={m.id} className="rounded bg-slate-50 p-2"><span className="font-semibold">{m.sender_name}</span> ({m.sender_role}): {m.message}</p>)}
+                {teamMessages.length === 0 ? <p className="text-slate-500">{tr("noTeamMessages")}</p> : null}
+                {teamMessages.map((m) => {
+                  const mine = currentUser?.id === m.sender_user_id;
+                  return (
+                    <div key={m.id} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
+                      <div className={`max-w-[85%] rounded-2xl px-3 py-2 ${mine ? "bg-cliniq-teal text-white" : "bg-slate-100 text-slate-800"}`}>
+                        <div className="mb-1 flex items-center gap-2 text-xs">
+                          {m.sender_avatar_url ? (
+                            <img
+                              src={`${process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000"}${m.sender_avatar_url}`}
+                              width={18}
+                              height={18}
+                              alt="avatar"
+                              className="h-[18px] w-[18px] rounded-full object-cover"
+                            />
+                          ) : (
+                            <span className="inline-flex h-[18px] w-[18px] items-center justify-center rounded-full bg-white/30 text-[10px] font-bold">
+                              {m.sender_name.slice(0, 1).toUpperCase()}
+                            </span>
+                          )}
+                          <span className="font-semibold">{m.sender_name}</span>
+                          <span className="opacity-70">{new Date(m.created_at).toLocaleTimeString()}</span>
+                        </div>
+                        <p>{m.message}</p>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
               <div className="flex gap-2">
-                <input className="flex-1 rounded-lg border p-2" value={teamMessageInput} onChange={(e) => setTeamMessageInput(e.target.value)} placeholder="Message all health workers..." />
-                <button onClick={sendTeamMessage} className="rounded-lg bg-cliniq-teal px-4 py-2 font-semibold text-white">Send</button>
+                <input className="flex-1 rounded-lg border p-2" value={teamMessageInput} onChange={(e) => setTeamMessageInput(e.target.value)} placeholder={tr("messageTeam")} />
+                <button onClick={sendTeamMessage} className="rounded-lg bg-cliniq-teal px-4 py-2 font-semibold text-white">{tr("send")}</button>
               </div>
+            </div>
+          ) : null}
+
+          {activeSection === "profile" ? (
+            <div className="space-y-4">
+              <div className="flex items-center gap-3">
+                {currentUser?.avatar_url ? (
+                  <img
+                    src={`${process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000"}${currentUser.avatar_url}`}
+                    width={72}
+                    height={72}
+                    alt="profile"
+                    className="h-[72px] w-[72px] rounded-full object-cover"
+                  />
+                ) : (
+                  <div className="flex h-[72px] w-[72px] items-center justify-center rounded-full bg-slate-200 text-2xl font-bold text-slate-600">
+                    {(profileForm.full_name || "C").slice(0, 1).toUpperCase()}
+                  </div>
+                )}
+                <div className="flex-1">
+                  <input type="file" accept="image/*" onChange={(e) => setAvatarFile(e.target.files?.[0] || null)} className="w-full rounded-lg border p-2 text-sm" />
+                  <button onClick={uploadAvatar} className="mt-2 rounded-lg border border-cliniq-teal px-3 py-2 text-sm font-semibold text-cliniq-teal">
+                    {tr("uploadProfilePicture")}
+                  </button>
+                </div>
+              </div>
+              <div className="grid gap-3 md:grid-cols-2">
+                <input className="rounded-lg border p-2" value={profileForm.full_name} onChange={(e) => setProfileForm((p) => ({ ...p, full_name: e.target.value }))} placeholder={tr("fullName")} />
+                <input className="rounded-lg border p-2" value={profileForm.department} onChange={(e) => setProfileForm((p) => ({ ...p, department: e.target.value }))} placeholder={tr("department")} />
+                <input className="rounded-lg border p-2 md:col-span-2" value={profileForm.phone} onChange={(e) => setProfileForm((p) => ({ ...p, phone: e.target.value }))} placeholder={tr("phone")} />
+              </div>
+              <textarea className="min-h-20 w-full rounded-lg border p-2" value={profileForm.bio} onChange={(e) => setProfileForm((p) => ({ ...p, bio: e.target.value }))} placeholder={tr("professionalBio")} />
+              <button onClick={updateProfile} className="rounded-lg bg-cliniq-teal px-4 py-2 font-semibold text-white">
+                {tr("saveProfile")}
+              </button>
             </div>
           ) : null}
 

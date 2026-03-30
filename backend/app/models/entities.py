@@ -30,6 +30,10 @@ class User(SQLModel, table=True):
     email: str = Field(index=True, unique=True)
     password_hash: str
     role: UserRole = Field(default=UserRole.nurse)
+    department: str = "General"
+    phone: Optional[str] = None
+    avatar_url: Optional[str] = None
+    bio: Optional[str] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 

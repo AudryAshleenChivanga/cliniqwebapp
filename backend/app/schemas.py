@@ -46,7 +46,18 @@ class UserRead(BaseModel):
     full_name: str
     email: EmailStr
     role: UserRole
+    department: str
+    phone: Optional[str] = None
+    avatar_url: Optional[str] = None
+    bio: Optional[str] = None
     created_at: datetime
+
+
+class UserProfileUpdate(BaseModel):
+    full_name: Optional[str] = None
+    department: Optional[str] = None
+    phone: Optional[str] = None
+    bio: Optional[str] = None
 
 
 class LoginRequest(BaseModel):
@@ -169,6 +180,7 @@ class TeamChatRead(BaseModel):
     sender_user_id: int
     sender_name: str
     sender_role: str
+    sender_avatar_url: Optional[str] = None
     message: str
     created_at: datetime
 
