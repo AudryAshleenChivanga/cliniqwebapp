@@ -7,13 +7,16 @@ function authHeader() {
 }
 
 export async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
+  const headers = new Headers(init?.headers);
+  headers.set("Content-Type", "application/json");
+
+  for (const [key, value] of Object.entries(authHeader())) {
+    headers.set(key, value);
+  }
+
   const response = await fetch(`${API_BASE}${path}`, {
     ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...authHeader(),
-      ...(init?.headers || {}),
-    },
+    headers,
     cache: "no-store",
   });
   if (!response.ok) {

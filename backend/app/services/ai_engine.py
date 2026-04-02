@@ -26,7 +26,7 @@ def _extract_symptom_flags(text: str) -> dict[str, int]:
     lower = text.lower()
     flags = {v: 0 for v in SYMPTOM_MAP.values()}
     for token, feature in SYMPTOM_MAP.items():
-        if re.search(rf"\\b{re.escape(token)}\\b", lower):
+        if re.search(rf"\b{re.escape(token)}\b", lower):
             flags[feature] = 1
     return flags
 

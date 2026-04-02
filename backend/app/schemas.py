@@ -99,7 +99,7 @@ class PredictionInput(BaseModel):
     heart_rate: int
     oxygen_saturation: Optional[float] = 98
     medical_history: str = ""
-    available_drugs: list[str] = []
+    available_drugs: list[str] = Field(default_factory=list)
 
 
 class PredictionOutput(BaseModel):
@@ -242,7 +242,7 @@ class EncounterWorkflowInput(BaseModel):
     medical_history: str = ""
     symptoms: str
     vitals: VitalsInput
-    labs: LabsInput = LabsInput()
+    labs: LabsInput = Field(default_factory=LabsInput)
     target_facility: str = "District Hospital"
     call_ambulance_if_critical: bool = True
 

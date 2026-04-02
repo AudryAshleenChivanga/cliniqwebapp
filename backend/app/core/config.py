@@ -8,6 +8,8 @@ class Settings(BaseSettings):
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 60 * 8
     database_url: str = "sqlite:///./cliniq.db"
+    database_fallback_enabled: bool = True
+    database_fallback_url: str = "sqlite:///./cliniq.db"
     ai_model_path: str = "../ai-model/src/model.joblib"
     allowed_origins: str = "http://localhost:3000"
     advisor_provider: str = "rule_based"  # rule_based | ollama | huggingface

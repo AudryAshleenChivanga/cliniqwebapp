@@ -56,14 +56,14 @@ if ($port8000InUse) {
   Write-Host "Port 8000 is already in use. Backend may already be running." -ForegroundColor Yellow
 } else {
   Write-Host "Starting backend on http://localhost:8000/health ..." -ForegroundColor Green
-  Start-Process powershell -ArgumentList "-NoExit", "-Command", $backendCommand | Out-Null
+  Start-Process powershell -ArgumentList "-NoProfile", "-NoExit", "-Command", $backendCommand | Out-Null
 }
 
 if ($port3000InUse) {
   Write-Host "Port 3000 is already in use. Frontend may already be running." -ForegroundColor Yellow
 } else {
   Write-Host "Starting frontend on http://localhost:3000 ..." -ForegroundColor Green
-  Start-Process powershell -ArgumentList "-NoExit", "-Command", $frontendCommand | Out-Null
+  Start-Process powershell -ArgumentList "-NoProfile", "-NoExit", "-Command", $frontendCommand | Out-Null
 }
 
 Write-Host "ClinIQ is launching in two new terminals." -ForegroundColor Yellow

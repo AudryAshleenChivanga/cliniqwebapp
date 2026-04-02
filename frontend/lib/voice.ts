@@ -1,8 +1,23 @@
+type SpeechRecognitionResultEventLite = {
+  results: ArrayLike<ArrayLike<{ transcript: string }>>;
+};
+
+type SpeechRecognitionLite = {
+  lang: string;
+  interimResults: boolean;
+  maxAlternatives: number;
+  onresult: ((event: SpeechRecognitionResultEventLite) => void) | null;
+  onerror: (() => void) | null;
+  start: () => void;
+};
+
+type SpeechRecognitionCtor = new () => SpeechRecognitionLite;
+
 type SpeechRecognitionType = typeof window extends never
   ? never
   : (typeof window & {
-      webkitSpeechRecognition?: new () => SpeechRecognition;
-      SpeechRecognition?: new () => SpeechRecognition;
+      webkitSpeechRecognition?: SpeechRecognitionCtor;
+      SpeechRecognition?: SpeechRecognitionCtor;
     });
 
 export function transcribeOnce(onText: (text: string) => void, onError: (message: string) => void) {
@@ -18,7 +33,7 @@ export function transcribeOnce(onText: (text: string) => void, onError: (message
   recognition.interimResults = false;
   recognition.maxAlternatives = 1;
 
-  recognition.onresult = (event) => {
+  recognition.onresult = (event: SpeechRecognitionResultEventLite) => {
     const transcript = event.results[0][0].transcript;
     onText(transcript);
   };

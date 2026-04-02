@@ -8,7 +8,7 @@ from sqlalchemy import text
 from sqlmodel import Session, select
 
 from .core.config import get_settings
-from .db import create_db_and_tables, engine
+from . import db
 from .models.entities import DrugStock, User, UserRole
 from .routers import (
     analytics,
@@ -33,10 +33,10 @@ settings = get_settings()
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    create_db_and_tables()
+    db.create_db_and_tables()
     # Backward-compatible column additions for existing SQLite databases.
-    if settings.database_url.startswith("sqlite"):
-        with engine.begin() as conn:
+    if str(db.engine.url).startswith("sqlite"):
+        with db.engine.begin() as conn:
             existing_cols = {row[1] for row in conn.execute(text("PRAGMA table_info(user)")).fetchall()}
             alter_statements = []
             if "department" not in existing_cols:
@@ -49,7 +49,7 @@ async def lifespan(_: FastAPI):
                 alter_statements.append("ALTER TABLE user ADD COLUMN bio VARCHAR")
             for stmt in alter_statements:
                 conn.execute(text(stmt))
-    with Session(engine) as session:
+    with Session(db.engine) as session:
         admin = session.exec(select(User).where(User.email == "admin@cliniq.app")).first()
         if not admin:
             session.add(
