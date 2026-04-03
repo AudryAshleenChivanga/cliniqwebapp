@@ -23,6 +23,68 @@ def _format_context(context: dict[str, Any] | None) -> str:
     return "Patient context:\n" + "\n".join(lines)
 
 
+def _hf_candidate_urls(model_id: str, explicit_url: str) -> list[str]:
+    urls: list[str] = []
+    clean_url = explicit_url.strip()
+    clean_model = model_id.strip().strip("/")
+
+    if clean_url:
+        urls.append(clean_url)
+    if clean_model:
+        urls.append(f"https://router.huggingface.co/hf-inference/models/{clean_model}/v1/chat/completions")
+        urls.append(f"https://api-inference.huggingface.co/models/{clean_model}")
+
+    deduped: list[str] = []
+    for url in urls:
+        if url not in deduped:
+            deduped.append(url)
+    return deduped
+
+
+def _extract_message_text(content: Any) -> str | None:
+    if isinstance(content, str):
+        return content.strip() or None
+    if isinstance(content, list):
+        parts: list[str] = []
+        for item in content:
+            if isinstance(item, dict):
+                text = item.get("text")
+                if isinstance(text, str) and text.strip():
+                    parts.append(text.strip())
+        if parts:
+            return "\n".join(parts)
+    return None
+
+
+def _extract_hf_text(payload: Any) -> str | None:
+    if isinstance(payload, dict):
+        choices = payload.get("choices")
+        if isinstance(choices, list) and choices and isinstance(choices[0], dict):
+            message = choices[0].get("message")
+            if isinstance(message, dict):
+                text = _extract_message_text(message.get("content"))
+                if text:
+                    return text
+
+        generated = payload.get("generated_text")
+        text = _extract_message_text(generated)
+        if text:
+            return text
+
+    if isinstance(payload, list) and payload:
+        first = payload[0]
+        if isinstance(first, dict):
+            generated = first.get("generated_text")
+            text = _extract_message_text(generated)
+            if text:
+                return text
+    return None
+
+
+def _hf_headers(token: str) -> dict[str, str]:
+    return {"Authorization": f"Bearer {token}"}
+
+
 def generate_advisor_response(prompt: str, patient_context: dict[str, Any] | None = None) -> str:
     settings = get_settings()
     provider = settings.advisor_provider.lower().strip()
@@ -50,20 +112,36 @@ def generate_advisor_response(prompt: str, patient_context: dict[str, Any] | Non
             pass
 
     if provider == "huggingface" and settings.hf_api_token:
+        user_prompt = f"{_format_context(patient_context)}\n\nQuestion: {prompt}"
         try:
             with httpx.Client(timeout=8.0) as client:
-                response = client.post(
-                    settings.hf_api_url,
-                    headers={"Authorization": f"Bearer {settings.hf_api_token}"},
-                    json={
-                        "inputs": f"{_system_prompt()}\n\n{_format_context(patient_context)}\n\nQuestion: {prompt}",
-                        "parameters": {"max_new_tokens": 380, "temperature": 0.4},
-                    },
-                )
-                response.raise_for_status()
-                payload = response.json()
-                if isinstance(payload, list) and payload and isinstance(payload[0], dict):
-                    text = payload[0].get("generated_text")
+                for url in _hf_candidate_urls(settings.hf_model_id, settings.hf_api_url):
+                    if url.endswith("/v1/chat/completions"):
+                        response = client.post(
+                            url,
+                            headers=_hf_headers(settings.hf_api_token),
+                            json={
+                                "model": settings.hf_model_id,
+                                "messages": [
+                                    {"role": "system", "content": _system_prompt()},
+                                    {"role": "user", "content": user_prompt},
+                                ],
+                                "max_tokens": 380,
+                                "temperature": 0.4,
+                            },
+                        )
+                    else:
+                        response = client.post(
+                            url,
+                            headers=_hf_headers(settings.hf_api_token),
+                            json={
+                                "inputs": f"{_system_prompt()}\n\n{user_prompt}",
+                                "parameters": {"max_new_tokens": 380, "temperature": 0.4},
+                            },
+                        )
+
+                    response.raise_for_status()
+                    text = _extract_hf_text(response.json())
                     if text:
                         return text
         except Exception:
@@ -94,10 +172,15 @@ def advisor_status() -> dict[str, Any]:
             return {"provider": "huggingface", "available": False, "mode": "fallback_local"}
         try:
             with httpx.Client(timeout=2.5) as client:
-                resp = client.get(settings.hf_api_url, headers={"Authorization": f"Bearer {settings.hf_api_token}"})
-                if resp.status_code in {200, 401, 403, 404, 405}:
-                    # endpoint reachable even if method/token/model behavior differs
-                    return {"provider": "huggingface", "available": True, "mode": "open_source_api"}
+                for url in _hf_candidate_urls(settings.hf_model_id, settings.hf_api_url):
+                    resp = client.get(url, headers=_hf_headers(settings.hf_api_token))
+                    if resp.status_code in {200, 401, 403, 404, 405}:
+                        # Endpoint is reachable even if auth/method/model behavior differs.
+                        return {
+                            "provider": "huggingface",
+                            "available": True,
+                            "mode": f"open_source_api:{settings.hf_model_id}",
+                        }
             return {"provider": "huggingface", "available": False, "mode": "fallback_local"}
         except Exception:
             return {"provider": "huggingface", "available": False, "mode": "fallback_local"}

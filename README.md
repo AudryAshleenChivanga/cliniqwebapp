@@ -104,7 +104,7 @@ Seeded accounts:
 ClinIQ advisor supports:
 - `rule_based` (default fallback)
 - `ollama` (local open-source LLM API)
-- `huggingface` (Inference API)
+- `huggingface` (Hugging Face Inference API / router)
 
 Set in `backend/.env`:
 - `ADVISOR_PROVIDER=ollama`
@@ -113,8 +113,11 @@ Set in `backend/.env`:
 
 Or Hugging Face:
 - `ADVISOR_PROVIDER=huggingface`
-- `HF_API_URL=...`
+- `HF_MODEL_ID=google/medgemma-1.5-4b-it`
+- `HF_API_URL=`
 - `HF_API_TOKEN=...`
+
+`HF_API_URL` is optional. If left blank, the backend will try the Hugging Face router chat-completions endpoint first and then the legacy inference endpoint for the configured model.
 
 ## Deployment
 

@@ -15,7 +15,8 @@ class Settings(BaseSettings):
     advisor_provider: str = "rule_based"  # rule_based | ollama | huggingface
     ollama_url: str = "http://localhost:11434"
     ollama_model: str = "llama3.1:8b"
-    hf_api_url: str = "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.3"
+    hf_model_id: str = "google/medgemma-1.5-4b-it"
+    hf_api_url: str = ""
     hf_api_token: str = ""
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")

@@ -9,6 +9,8 @@
   --text: #12343b;
   --muted: #4e6b70;
   --critical: #d7263d;
+  --panel-border: #d8ecea;
+  --panel-shadow: 0 24px 60px rgba(10, 77, 79, 0.08);
 }
 
 body {
@@ -23,4 +25,52 @@ body {
 
 .section-title {
   @apply text-lg font-semibold tracking-tight text-cliniq-slate;
+}
+
+.dashboard-card {
+  @apply rounded-[28px] border bg-white/95;
+  border-color: var(--panel-border);
+  box-shadow: var(--panel-shadow);
+}
+
+.dashboard-action {
+  @apply inline-flex items-center rounded-full px-4 py-2.5 text-sm font-semibold text-white transition;
+  background: linear-gradient(135deg, #0c8d86 0%, #11b1a9 100%);
+}
+
+.dashboard-action:hover {
+  transform: translateY(-1px);
+}
+
+.dashboard-action--soft {
+  @apply text-slate-700;
+  background: #eef8f7;
+}
+
+.workspace-input {
+  @apply rounded-2xl border bg-white px-4 py-3 text-sm text-slate-700 outline-none transition;
+  border-color: #d8ecea;
+}
+
+.workspace-input:focus {
+  border-color: #67c7c0;
+  box-shadow: 0 0 0 4px rgba(15, 183, 176, 0.12);
+}
+
+.metric-tile {
+  @apply flex min-h-[108px] flex-col rounded-[24px] border px-4 py-4;
+  border-color: #dcefee;
+  background: linear-gradient(180deg, #ffffff 0%, #f7fbfb 100%);
+}
+
+.metric-tile strong {
+  @apply mt-2 text-[30px] font-semibold leading-none text-cliniq-slate;
+}
+
+.metric-label {
+  @apply text-xs font-semibold uppercase tracking-[0.18em] text-slate-500;
+}
+
+.metric-sub {
+  @apply mt-2 text-xs text-slate-500;
 }
