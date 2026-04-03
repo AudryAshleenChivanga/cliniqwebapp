@@ -596,6 +596,34 @@ export default function DashboardPage() {
     ];
   }, [currentPrediction]);
 
+  const teamRoster = useMemo(() => {
+    const seen = new Set<number>();
+    const members = teamMessages.reduce<Array<{ id: number; name: string; role: string; avatarUrl?: string; lastSeen: string }>>((list, message) => {
+      if (seen.has(message.sender_user_id)) return list;
+      seen.add(message.sender_user_id);
+      list.push({
+        id: message.sender_user_id,
+        name: message.sender_name,
+        role: message.sender_role,
+        avatarUrl: message.sender_avatar_url,
+        lastSeen: new Date(message.created_at).toLocaleTimeString(),
+      });
+      return list;
+    }, []);
+
+    if (currentUser && !seen.has(currentUser.id)) {
+      members.unshift({
+        id: currentUser.id,
+        name: currentUser.full_name,
+        role: currentUser.role,
+        avatarUrl: currentUser.avatar_url,
+        lastSeen: "online",
+      });
+    }
+
+    return members.slice(0, 6);
+  }, [currentUser, teamMessages]);
+
   const outstandingTasks = useMemo(() => {
     const tasks = [
       {
@@ -958,43 +986,101 @@ export default function DashboardPage() {
 
     if (activeSection === "team") {
       return (
-        <div className="space-y-3">
-          <div className="max-h-64 space-y-2 overflow-auto rounded-[24px] border border-[#d9efed] p-3 text-sm">
-            {teamMessages.length === 0 ? <p className="text-slate-500">{tr("noTeamMessages")}</p> : null}
-            {teamMessages.map((m) => {
-              const mine = currentUser?.id === m.sender_user_id;
-              return (
-                <div key={m.id} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
-                  <div className={`max-w-[85%] rounded-[22px] px-3 py-2 ${mine ? "bg-cliniq-teal text-white" : "bg-slate-100 text-slate-800"}`}>
-                    <div className="mb-1 flex items-center gap-2 text-xs">
-                      {m.sender_avatar_url ? (
-                        <img
-                          src={`${process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000"}${m.sender_avatar_url}`}
-                          width={18}
-                          height={18}
-                          alt="avatar"
-                          className="h-[18px] w-[18px] rounded-full object-cover"
-                        />
-                      ) : (
-                        <span className="inline-flex h-[18px] w-[18px] items-center justify-center rounded-full bg-white/30 text-[10px] font-bold">
-                          {m.sender_name.slice(0, 1).toUpperCase()}
-                        </span>
-                      )}
-                      <span className="font-semibold">{m.sender_name}</span>
-                      <span className="opacity-70">{new Date(m.created_at).toLocaleTimeString()}</span>
+        <div className="team-shell grid gap-0 overflow-hidden rounded-[30px] border border-[#d4ebe8] lg:grid-cols-[320px_minmax(0,1fr)]">
+          <aside className="team-shell__sidebar px-5 py-5">
+            <div className="mb-6">
+              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#1a8a85]">Clinical Group</p>
+              <h3 className="mt-2 text-2xl font-semibold text-cliniq-slate">Care Coordination</h3>
+              <p className="mt-2 text-sm text-slate-500">A focused room for nurses, doctors, and support staff to coordinate actions in real time.</p>
+            </div>
+
+            <div className="rounded-[24px] bg-white/80 p-4 shadow-[0_18px_40px_rgba(10,77,79,0.08)]">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-semibold text-cliniq-slate">Team Members</p>
+                <span className="rounded-full bg-[#e5f7f5] px-2.5 py-1 text-[11px] font-semibold text-[#1a8a85]">{teamRoster.length} online</span>
+              </div>
+              <div className="mt-4 space-y-3">
+                {teamRoster.map((member) => (
+                  <div key={member.id} className="flex items-center gap-3 rounded-[20px] bg-[#f8fcfc] px-3 py-3">
+                    {member.avatarUrl ? (
+                      <img
+                        src={`${process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000"}${member.avatarUrl}`}
+                        width={42}
+                        height={42}
+                        alt={member.name}
+                        className="h-[42px] w-[42px] rounded-full object-cover"
+                      />
+                    ) : (
+                      <span className="inline-flex h-[42px] w-[42px] items-center justify-center rounded-full bg-[linear-gradient(135deg,#d7f3f1,#b6e7e3)] text-sm font-bold text-cliniq-slate">
+                        {member.name.slice(0, 1).toUpperCase()}
+                      </span>
+                    )}
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-cliniq-slate">{member.name}</p>
+                      <p className="text-xs uppercase tracking-[0.14em] text-slate-500">{member.role}</p>
                     </div>
-                    <p>{m.message}</p>
+                    <span className="ml-auto text-[11px] text-slate-400">{member.lastSeen}</span>
                   </div>
-                </div>
-              );
-            })}
-          </div>
-          <div className="flex gap-2">
-            <input className="workspace-input flex-1" value={teamMessageInput} onChange={(e) => setTeamMessageInput(e.target.value)} placeholder={tr("messageTeam")} />
-            <button onClick={sendTeamMessage} className="dashboard-action">
-              {tr("send")}
-            </button>
-          </div>
+                ))}
+                {teamRoster.length === 0 ? <p className="text-sm text-slate-500">{tr("noTeamMessages")}</p> : null}
+              </div>
+            </div>
+
+            <div className="mt-5 rounded-[24px] border border-white/70 bg-white/50 p-4">
+              <p className="text-sm font-semibold text-cliniq-slate">Room Notes</p>
+              <p className="mt-2 text-sm text-slate-500">Use this space for concise handoffs, approvals, and next steps. Keep urgent escalation in the doctor channel.</p>
+            </div>
+          </aside>
+
+          <section className="team-shell__main flex min-h-[560px] flex-col bg-white px-5 py-5">
+            <div className="team-shell__hero mb-4 rounded-[28px] px-5 py-5 text-white">
+              <div className="max-w-lg">
+                <p className="text-xs font-semibold uppercase tracking-[0.24em] text-cyan-100">Shared Workspace</p>
+                <h3 className="mt-2 text-3xl font-semibold">Group Chat</h3>
+                <p className="mt-2 text-sm text-cyan-50">Fast communication for clinical decisions, updates, and support across the care team.</p>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-auto rounded-[24px] bg-[#f7fbfb] p-4">
+              <div className="space-y-3">
+                {teamMessages.length === 0 ? <p className="text-slate-500">{tr("noTeamMessages")}</p> : null}
+                {teamMessages.map((m) => {
+                  const mine = currentUser?.id === m.sender_user_id;
+                  return (
+                    <div key={m.id} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
+                      <div className={cn("max-w-[85%] rounded-[24px] px-4 py-3 shadow-[0_14px_30px_rgba(10,77,79,0.08)]", mine ? "bg-[linear-gradient(135deg,#0c8d86,#11b1a9)] text-white" : "bg-white text-slate-800")}>
+                        <div className="mb-2 flex items-center gap-2 text-xs">
+                          {m.sender_avatar_url ? (
+                            <img
+                              src={`${process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000"}${m.sender_avatar_url}`}
+                              width={22}
+                              height={22}
+                              alt="avatar"
+                              className="h-[22px] w-[22px] rounded-full object-cover"
+                            />
+                          ) : (
+                            <span className={cn("inline-flex h-[22px] w-[22px] items-center justify-center rounded-full text-[10px] font-bold", mine ? "bg-white/20 text-white" : "bg-[#dff3f1] text-cliniq-slate")}>
+                              {m.sender_name.slice(0, 1).toUpperCase()}
+                            </span>
+                          )}
+                          <span className="font-semibold">{m.sender_name}</span>
+                          <span className={mine ? "text-white/70" : "text-slate-400"}>{new Date(m.created_at).toLocaleTimeString()}</span>
+                        </div>
+                        <p className="text-sm leading-6">{m.message}</p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="mt-4 flex flex-col gap-3 rounded-[24px] border border-[#d9efed] bg-white p-3 md:flex-row">
+              <input className="workspace-input flex-1 border-0 bg-[#f8fcfc]" value={teamMessageInput} onChange={(e) => setTeamMessageInput(e.target.value)} placeholder={tr("messageTeam")} />
+              <button onClick={sendTeamMessage} className="dashboard-action justify-center md:min-w-[140px]">
+                {tr("send")}
+              </button>
+            </div>
+          </section>
         </div>
       );
     }
@@ -1087,31 +1173,67 @@ export default function DashboardPage() {
 
   if (!loggedIn) {
     return (
-      <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-6">
-        <div className="dashboard-card space-y-4 p-6">
-          <div className="flex items-center gap-3">
-            <Image src="/icon-192.png" width={44} height={44} alt="ClinIQ logo" className="rounded-xl" />
-            <div>
-              <h1 className="text-2xl font-bold">{authMode === "signin" ? tr("signIn") : tr("signUp")}</h1>
-              <p className="text-sm text-slate-600">{tr("authHelper")}</p>
+      <main className="auth-shell px-4 py-6 md:px-8">
+        <div className="auth-shell__frame mx-auto grid min-h-[88vh] max-w-[1180px] overflow-hidden rounded-[34px] bg-white shadow-[0_35px_85px_rgba(10,77,79,0.14)] lg:grid-cols-[1.02fr_1fr]">
+          <section className="flex items-center justify-center px-6 py-8 md:px-12">
+            <div className="w-full max-w-[390px]">
+              <div className="mb-8 flex items-center gap-3">
+                <Image src="/icon-192.png" width={48} height={48} alt="ClinIQ logo" className="rounded-2xl" />
+                <div>
+                  <p className="text-2xl font-semibold tracking-tight text-cliniq-slate">{authMode === "signin" ? tr("signIn") : tr("signUp")}</p>
+                  <p className="text-sm text-slate-500">{tr("authHelper")}</p>
+                </div>
+              </div>
+
+              <div className="mb-6 inline-flex rounded-full bg-[#eef8f7] p-1">
+                <button onClick={() => setAuthMode("signin")} className={cn("rounded-full px-4 py-2 text-sm font-semibold transition", authMode === "signin" ? "bg-white text-cliniq-slate shadow-sm" : "text-slate-500")}>
+                  {tr("signIn")}
+                </button>
+                <button onClick={() => setAuthMode("signup")} className={cn("rounded-full px-4 py-2 text-sm font-semibold transition", authMode === "signup" ? "bg-white text-cliniq-slate shadow-sm" : "text-slate-500")}>
+                  {tr("signUp")}
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                {authMode === "signup" ? <input className="workspace-input auth-input" value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder={tr("fullName")} /> : null}
+                <input className="workspace-input auth-input" value={email} onChange={(e) => setEmail(e.target.value)} placeholder={tr("email")} />
+                <input type="password" className="workspace-input auth-input" value={password} onChange={(e) => setPassword(e.target.value)} placeholder={tr("password")} />
+                <p className="text-xs text-[#1a8a85]">{tr("strongPasswordHint")}</p>
+                <button onClick={handleAuth} disabled={loading} className="dashboard-action auth-submit w-full justify-center">
+                  {loading ? "..." : authMode === "signin" ? tr("signIn") : tr("createAccount")}
+                </button>
+                {error ? <p className="break-words text-sm text-red-600">{error}</p> : null}
+              </div>
+
+              <div className="mt-8 rounded-[22px] bg-[#f6fbfb] p-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#1a8a85]">Demo Access</p>
+                <p className="mt-2 text-sm text-slate-600">Use the seeded nurse account to enter the clinical workspace quickly while we iterate page by page.</p>
+                <p className="mt-2 text-sm font-semibold text-cliniq-slate">nurse@cliniq.app / Nurse123!</p>
+              </div>
             </div>
-          </div>
-          <div className="flex gap-2">
-            <button onClick={() => setAuthMode("signin")} className={`rounded-full px-4 py-2 text-sm ${authMode === "signin" ? "bg-cliniq-teal text-white" : "bg-slate-100"}`}>
-              {tr("signIn")}
-            </button>
-            <button onClick={() => setAuthMode("signup")} className={`rounded-full px-4 py-2 text-sm ${authMode === "signup" ? "bg-cliniq-teal text-white" : "bg-slate-100"}`}>
-              {tr("signUp")}
-            </button>
-          </div>
-          {authMode === "signup" ? <input className="workspace-input" value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder={tr("fullName")} /> : null}
-          <input className="workspace-input" value={email} onChange={(e) => setEmail(e.target.value)} placeholder={tr("email")} />
-          <input type="password" className="workspace-input" value={password} onChange={(e) => setPassword(e.target.value)} placeholder={tr("password")} />
-          <p className="text-xs text-slate-500">{tr("strongPasswordHint")}</p>
-          <button onClick={handleAuth} disabled={loading} className="dashboard-action w-full justify-center">
-            {loading ? "..." : authMode === "signin" ? tr("signIn") : tr("createAccount")}
-          </button>
-          {error ? <p className="break-words text-sm text-red-600">{error}</p> : null}
+          </section>
+
+          <section className="auth-visual relative hidden overflow-hidden lg:flex">
+            <div className="auth-visual__orb auth-visual__orb--one" />
+            <div className="auth-visual__orb auth-visual__orb--two" />
+            <div className="auth-visual__orb auth-visual__orb--three" />
+            <div className="relative z-10 flex w-full flex-col justify-between p-10 text-white">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.28em] text-cyan-100">ClinIQ Workspace</p>
+                <h2 className="mt-4 max-w-md text-4xl font-semibold leading-tight">Connected care coordination with fast bedside decisions.</h2>
+                <p className="mt-4 max-w-md text-sm leading-6 text-cyan-50">The command center stays calm, clinical, and collaborative while preserving the platform palette you already established.</p>
+              </div>
+
+              <div className="relative mx-auto flex h-[420px] w-full max-w-[420px] items-end justify-center">
+                <div className="auth-visual__figure">
+                  <div className="auth-visual__headset" />
+                  <div className="auth-visual__head" />
+                  <div className="auth-visual__body" />
+                  <div className="auth-visual__device" />
+                </div>
+              </div>
+            </div>
+          </section>
         </div>
       </main>
     );

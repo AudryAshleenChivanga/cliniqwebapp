@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     database_fallback_url: str = "sqlite:///./cliniq.db"
     ai_model_path: str = "../ai-model/src/model.joblib"
     allowed_origins: str = "http://localhost:3000"
-    advisor_provider: str = "rule_based"  # rule_based | ollama | huggingface
+    advisor_provider: str = "medgemma"  # medgemma | huggingface | rule_based | ollama
     ollama_url: str = "http://localhost:11434"
     ollama_model: str = "llama3.1:8b"
     hf_model_id: str = "google/medgemma-1.5-4b-it"

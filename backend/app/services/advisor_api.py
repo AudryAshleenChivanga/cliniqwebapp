@@ -85,9 +85,22 @@ def _hf_headers(token: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
 
 
+def _normalized_provider_name(raw_provider: str, model_id: str) -> str:
+    provider = raw_provider.lower().strip()
+    if provider == "medgemma":
+        return "medgemma"
+    if provider == "huggingface" and "medgemma" in model_id.lower():
+        return "medgemma"
+    return provider
+
+
+def _uses_huggingface(provider: str) -> bool:
+    return provider in {"huggingface", "medgemma"}
+
+
 def generate_advisor_response(prompt: str, patient_context: dict[str, Any] | None = None) -> str:
     settings = get_settings()
-    provider = settings.advisor_provider.lower().strip()
+    provider = _normalized_provider_name(settings.advisor_provider, settings.hf_model_id)
 
     if provider == "ollama":
         try:
@@ -111,7 +124,7 @@ def generate_advisor_response(prompt: str, patient_context: dict[str, Any] | Non
         except Exception:
             pass
 
-    if provider == "huggingface" and settings.hf_api_token:
+    if _uses_huggingface(provider) and settings.hf_api_token:
         user_prompt = f"{_format_context(patient_context)}\n\nQuestion: {prompt}"
         try:
             with httpx.Client(timeout=8.0) as client:
@@ -153,7 +166,7 @@ def generate_advisor_response(prompt: str, patient_context: dict[str, Any] | Non
 
 def advisor_status() -> dict[str, Any]:
     settings = get_settings()
-    provider = settings.advisor_provider.lower().strip()
+    provider = _normalized_provider_name(settings.advisor_provider, settings.hf_model_id)
 
     if provider == "rule_based":
         return {"provider": "rule_based", "available": True, "mode": "fallback_local"}
@@ -167,9 +180,13 @@ def advisor_status() -> dict[str, Any]:
         except Exception:
             return {"provider": "ollama", "available": False, "mode": "fallback_local"}
 
-    if provider == "huggingface":
+    if _uses_huggingface(provider):
         if not settings.hf_api_token:
-            return {"provider": "huggingface", "available": False, "mode": "fallback_local"}
+            return {
+                "provider": provider,
+                "available": False,
+                "mode": f"fallback_local:{settings.hf_model_id}:missing_token",
+            }
         try:
             with httpx.Client(timeout=2.5) as client:
                 for url in _hf_candidate_urls(settings.hf_model_id, settings.hf_api_url):
@@ -177,12 +194,12 @@ def advisor_status() -> dict[str, Any]:
                     if resp.status_code in {200, 401, 403, 404, 405}:
                         # Endpoint is reachable even if auth/method/model behavior differs.
                         return {
-                            "provider": "huggingface",
+                            "provider": provider,
                             "available": True,
                             "mode": f"open_source_api:{settings.hf_model_id}",
                         }
-            return {"provider": "huggingface", "available": False, "mode": "fallback_local"}
+            return {"provider": provider, "available": False, "mode": "fallback_local"}
         except Exception:
-            return {"provider": "huggingface", "available": False, "mode": "fallback_local"}
+            return {"provider": provider, "available": False, "mode": "fallback_local"}
 
     return {"provider": provider or "unknown", "available": False, "mode": "fallback_local"}

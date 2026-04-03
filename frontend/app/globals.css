@@ -74,3 +74,122 @@ body {
 .metric-sub {
   @apply mt-2 text-xs text-slate-500;
 }
+
+.auth-shell {
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at top left, rgba(17, 177, 169, 0.16), transparent 28%),
+    radial-gradient(circle at bottom right, rgba(12, 141, 134, 0.18), transparent 32%),
+    linear-gradient(135deg, #effaf9 0%, #e2f3f1 44%, #f7fcfc 100%);
+}
+
+.auth-shell__frame {
+  position: relative;
+}
+
+.auth-input {
+  min-height: 54px;
+}
+
+.auth-submit {
+  min-height: 54px;
+}
+
+.auth-visual {
+  background: linear-gradient(140deg, #0c8d86 0%, #12a9a2 52%, #75d8d2 100%);
+}
+
+.auth-visual__orb {
+  position: absolute;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.13);
+  filter: blur(4px);
+}
+
+.auth-visual__orb--one {
+  top: -40px;
+  right: -10px;
+  width: 220px;
+  height: 220px;
+}
+
+.auth-visual__orb--two {
+  bottom: 42px;
+  left: -44px;
+  width: 160px;
+  height: 160px;
+}
+
+.auth-visual__orb--three {
+  top: 120px;
+  left: 18%;
+  width: 120px;
+  height: 120px;
+}
+
+.auth-visual__figure {
+  position: relative;
+  width: 280px;
+  height: 360px;
+}
+
+.auth-visual__head {
+  position: absolute;
+  top: 34px;
+  left: 98px;
+  width: 92px;
+  height: 96px;
+  border-radius: 9999px;
+  background: linear-gradient(180deg, #ffd8c7 0%, #f1bca3 100%);
+  box-shadow: 0 18px 36px rgba(14, 44, 47, 0.16);
+}
+
+.auth-visual__headset {
+  position: absolute;
+  top: 24px;
+  left: 76px;
+  width: 136px;
+  height: 122px;
+  border-radius: 9999px;
+  border: 8px solid rgba(231, 244, 244, 0.95);
+  border-bottom-color: transparent;
+}
+
+.auth-visual__body {
+  position: absolute;
+  top: 116px;
+  left: 52px;
+  width: 182px;
+  height: 220px;
+  border-radius: 120px 120px 40px 40px;
+  background: linear-gradient(180deg, #f6f7fb 0%, #dbe9ee 100%);
+  box-shadow: 0 28px 50px rgba(14, 44, 47, 0.18);
+}
+
+.auth-visual__device {
+  position: absolute;
+  right: 20px;
+  bottom: 78px;
+  width: 76px;
+  height: 126px;
+  border-radius: 38px;
+  transform: rotate(24deg);
+  background: linear-gradient(180deg, #344a58 0%, #0f2430 100%);
+  box-shadow: inset 0 0 0 10px rgba(255, 255, 255, 0.08), 0 18px 38px rgba(14, 44, 47, 0.22);
+}
+
+.team-shell {
+  background: linear-gradient(120deg, #f4fbfb 0%, #edf8f7 40%, #ffffff 100%);
+}
+
+.team-shell__sidebar {
+  background:
+    radial-gradient(circle at top left, rgba(17, 177, 169, 0.16), transparent 28%),
+    linear-gradient(180deg, #eef9f8 0%, #e8f5f4 100%);
+}
+
+.team-shell__hero {
+  background:
+    radial-gradient(circle at top right, rgba(255, 255, 255, 0.18), transparent 30%),
+    linear-gradient(135deg, #0c8d86 0%, #13a69f 48%, #6cd3cd 100%);
+}
